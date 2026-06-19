@@ -23,13 +23,13 @@ const SEQUENCE = [
 const TEXT_POSITIONS = {
     'entrance':         { left: '5%',  top: '8%'  },
     'mirror':           { left: '4%',  top: '38%' },
-    'hallway':          { left: '36%', top: '53%' },
-    'window':           { left: '63%', top: '32%' },
+    'hallway':          { left: '4%',  top: '66%' },
+    'window':           { left: '50%', top: '4%'  },
     'bus-stop':         { left: '72%', top: '10%' },
-    'ghost-silhouette': { left: '38%', top: '7%'  },
-    'bathroom':         { left: '5%',  top: '17%' },
-    'ghost-return':     { left: '60%', top: '6%'  },
-    'window-cracked':   { left: '53%', top: '13%' },
+    'ghost-silhouette': { left: '38%', top: '25%' },
+    'bathroom':         { left: '72%', top: '36%' },
+    'ghost-return':     { left: '60%', top: '50%' },
+    'window-cracked':   { left: '68%', top: '72%' },
     'hallway-return':   { left: '28%', top: '12%' },
 };
 
@@ -424,12 +424,11 @@ ROOMS.forEach((def, i) => makeRoom(def, i));
 }
 
 
-// ── Ghost figure on roof ridge — visible from ghost-silhouette step onward ────
-// ── Ghost presence in attic window — a faint light blob, not a figure ───────────
+// ── Ghost silhouette in attic window — person backlit by interior room light ──
 {
-    const gfReg = (m, op) => {
+    const gfReg = (m, op, order = 12) => {
         m.userData.baseOp = op; m.userData.targetOp = 0;
-        m.renderOrder = 12;
+        m.renderOrder = order;
         allMeshes.push(m); scene.add(m); ghostFigureMeshes.push(m); return m;
     };
 
@@ -442,25 +441,66 @@ ROOMS.forEach((def, i) => makeRoom(def, i));
         new THREE.Plane(new THREE.Vector3( 0,-1, 0), 11.05),
     ];
 
-    const gfX = 0, gfY = 10.72, gfZ = 1.85;   // centred inside the gable
+    const gfX = 0, gfY = 10.72, gfZ = 1.85;
 
-    // Main blob — warm pale glow, clipped to window
-    const blobMat = new THREE.MeshBasicMaterial({
-        color: 0xF0ECD8, transparent: true, opacity: 0,
+    // Warm backlight plane — room light flooding through from inside, drawn first
+    const glowMat = new THREE.MeshBasicMaterial({
+        color: 0xFFF4D8, transparent: true, opacity: 0,
         depthTest: false, clippingPlanes: gfClip
     });
-    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), blobMat);
-    blob.position.set(gfX, gfY, gfZ);
-    gfReg(blob, 0.32);
+    const glow = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.68), glowMat);
+    glow.position.set(gfX, gfY, gfZ - 0.05);
+    gfReg(glow, 0.65, 10);
 
-    // Larger diffuse halo behind the blob
+    // Soft outer halo leaking around the figure
     const haloMat = new THREE.MeshBasicMaterial({
-        color: 0xFFF8F0, transparent: true, opacity: 0,
+        color: 0xFFEEC8, transparent: true, opacity: 0,
         depthTest: false, clippingPlanes: gfClip
     });
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.46, 10, 8), haloMat);
-    halo.position.set(gfX, gfY + 0.04, gfZ - 0.08);
-    gfReg(halo, 0.10);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.40, 10, 8), haloMat);
+    halo.position.set(gfX, gfY + 0.06, gfZ - 0.02);
+    gfReg(halo, 0.22, 11);
+
+    // ── Head + neck + shoulders — unified 2D shape filling the window ────────
+    const figShape = new THREE.Shape();
+    // Shoulders at bottom — wide base
+    figShape.moveTo(-0.26, -0.12);
+    figShape.lineTo(-0.26, -0.04);
+    figShape.bezierCurveTo(-0.24, 0.02, -0.10, 0.06, -0.06, 0.08);  // shoulder → neck
+    // Neck
+    figShape.lineTo(-0.06, 0.18);
+    // Jaw flares out into head
+    figShape.bezierCurveTo(-0.08, 0.20, -0.19, 0.24, -0.19, 0.33);
+    // Up to crown
+    figShape.bezierCurveTo(-0.19, 0.43, -0.10, 0.49,  0.00, 0.49);
+    figShape.bezierCurveTo( 0.10, 0.49,  0.19, 0.43,  0.19, 0.33);
+    // Down jaw to neck
+    figShape.bezierCurveTo( 0.19, 0.24,  0.08, 0.20,  0.06, 0.18);
+    figShape.lineTo( 0.06, 0.08);
+    figShape.bezierCurveTo( 0.10, 0.06,  0.24, 0.02,  0.26, -0.04);  // neck → shoulder
+    figShape.lineTo( 0.26, -0.12);
+    figShape.closePath();
+
+    const figMat = new THREE.MeshBasicMaterial({
+        color: 0x0A0618, transparent: true, opacity: 0,
+        depthTest: false, clippingPlanes: gfClip
+    });
+    const figMesh = new THREE.Mesh(new THREE.ShapeGeometry(figShape), figMat);
+    // Push down so shoulder base (local y=-0.12) falls below clip plane y=10.40 → flush with window bottom
+    // figY + (-0.12) < 10.40  →  figY < 10.52  →  use gfY-0.22 = 10.50
+    figMesh.position.set(gfX, gfY - 0.22, gfZ);
+    gfReg(figMesh, 0.92, 13);
+
+    // Glowing eyes — shift down by same 0.12 offset
+    [-0.075, 0.075].forEach(xOff => {
+        const eyeMat = new THREE.MeshBasicMaterial({
+            color: 0xC8DCF8, transparent: true, opacity: 0,
+            depthTest: false, clippingPlanes: gfClip
+        });
+        const eye = new THREE.Mesh(new THREE.CircleGeometry(0.030, 8), eyeMat);
+        eye.position.set(gfX + xOff, gfY + 0.08, gfZ + 0.002);
+        gfReg(eye, 0.52, 14);
+    });
 }
 
 // Roof
@@ -1487,17 +1527,8 @@ const STEP_THEMES = {
     // Day — entrance/mirror over open sky: dark ink works fine
     'entrance': { color: '#1a110a', shadow: '0 0 14px rgba(190,218,248,0.65), 0 1px 3px rgba(255,250,245,0.55)' },
     'mirror':   { color: '#1a110a', shadow: '0 0 14px rgba(190,218,248,0.65), 0 1px 3px rgba(255,250,245,0.55)' },
-    // Hallway text overlaps house walls — near-white + dark micro-stroke reads on any bg
-    'hallway': {
-        color: '#FFFEF8',
-        shadow: [
-            '-0.8px -0.8px 0 rgba(10,5,0,0.88)',
-            ' 0.8px -0.8px 0 rgba(10,5,0,0.88)',
-            '-0.8px  0.8px 0 rgba(10,5,0,0.88)',
-            ' 0.8px  0.8px 0 rgba(10,5,0,0.88)',
-            '0 0 14px rgba(200,225,255,0.35)',
-        ].join(','),
-    },
+    // Hallway — moved to left sky area, dark ink same as entrance/mirror
+    'hallway': { color: '#1a110a', shadow: '0 0 14px rgba(190,218,248,0.65), 0 1px 3px rgba(255,250,245,0.55)' },
     // Amber dusk — warm white + strong dark outline, no blue
     'window': {
         color: '#FFF8F0',
@@ -1522,9 +1553,10 @@ const STEP_THEMES = {
     },
     // Night — bright cream + stronger glow so text reads clearly on dark bg
     'ghost-silhouette': { color: '#F5EEE6', shadow: '0 1px 4px rgba(0,0,0,0.90), 0 0 22px rgba(80,40,200,0.35), 0 0 8px rgba(255,255,255,0.10)' },
-    'bathroom':         { color: '#FFFFFF', shadow: '0 1px 5px rgba(0,0,0,0.96), 0 0 28px rgba(70,35,200,0.50), 0 0 12px rgba(255,255,255,0.20)', dark: true },
+    // Bathroom — right exterior, white text on dark night sky
+    'bathroom':         { color: '#FFF8F4', shadow: '0 1px 4px rgba(0,0,0,0.85), 0 0 18px rgba(255,248,244,0.22)' },
     'ghost-return':     { color: '#F6F0E8', shadow: '0 1px 4px rgba(0,0,0,0.92), 0 0 20px rgba(55,28,160,0.35), 0 0 8px rgba(255,255,255,0.10)' },
-    'window-cracked':   { color: '#FFFFFF', shadow: '0 1px 4px rgba(0,0,0,0.92), 0 0 30px rgba(120,80,255,0.55), 0 0 14px rgba(255,255,255,0.22)' },
+    'window-cracked':   { color: '#FFF8F4', shadow: '0 1px 4px rgba(0,0,0,0.85), 0 0 18px rgba(255,248,244,0.22)' },
     'hallway-return':   { color: '#F5F0E8', shadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 18px rgba(35,17,120,0.32), 0 0  8px rgba(255,255,255,0.10)' },
 };
 
@@ -1621,8 +1653,9 @@ function goTo(newStep) {
     if (isLast) {
         textBlocks[id].className = 'poem-block visited';
     } else {
-        const hasDarkBg = STEP_THEMES[id]?.dark === true;
-        textBlocks[id].className = 'poem-block active' + (hasDarkBg ? ' is-dark' : '');
+        const theme = STEP_THEMES[id] || {};
+        const bgClass = theme.dark ? ' is-dark' : theme.light ? ' is-light' : '';
+        textBlocks[id].className = 'poem-block active' + bgClass;
         setRoomTranslucent(ROOM_HIGHLIGHT[id] || id);
         streamBlock(id);
     }
