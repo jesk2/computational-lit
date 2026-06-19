@@ -41,7 +41,7 @@ const ROOM_CAMERAS = {
     'window':           new THREE.Vector3(-1.5, 9,   14 ),
     'bus-stop':         new THREE.Vector3( 5,   2.2, 11 ),
     'ghost-silhouette': new THREE.Vector3( 0,  10,   20 ),
-    'bathroom':         new THREE.Vector3( 7,  10,   14 ),
+    'bathroom':         new THREE.Vector3( 3,   6,   13 ),
     'ghost-return':     new THREE.Vector3( 8,   3,   13 ),
     'window-cracked':   new THREE.Vector3(-2,   4,   11 ),
     'hallway-return':   new THREE.Vector3(-1,   3,   12 ),
@@ -55,7 +55,7 @@ const ROOM_LOOK_AT = {
     'window':           new THREE.Vector3(-1.5, 7.5, 0),
     'bus-stop':         new THREE.Vector3( 7,   1.5, -0.3),
     'ghost-silhouette': new THREE.Vector3( 0,   6.0, 0),
-    'bathroom':         new THREE.Vector3( 3,   7.2, 0),
+    'bathroom':         new THREE.Vector3( 3,   4.0, 0),
     'ghost-return':     new THREE.Vector3( 3,   0.5, 0),
     'window-cracked':   new THREE.Vector3( 0,   1.5, 0),
     'hallway-return':   new THREE.Vector3( 0,   0.5, 0),
@@ -64,7 +64,6 @@ const ROOM_LOOK_AT = {
 // per-step room highlight overrides
 const ROOM_HIGHLIGHT = {
     'window':         'window-cracked',  // "sky hangs low" → bedroom window
-    'bathroom':       'window',          // "ghost beneath my ribs" → study desk
     'window-cracked': 'hallway-return',  // "leave the window cracked" → ground floor middle
 };
 
@@ -83,8 +82,8 @@ const SCENE_BG = {
 
 const D = 4.0;
 const ROOMS = [
-    { id: 'entrance',         x: -3,   y:  1.5, wx: 3,  wy: 3,   color: 0xf0d8a8 },
-    { id: 'hallway-return',   x:  0,   y:  1.5, wx: 3,  wy: 3,   color: 0xeecca8 },
+    { id: 'entrance',         x: -3,   y:  1.5, wx: 3,  wy: 3,   color: 0xecdcb8 },
+    { id: 'hallway-return',   x:  0,   y:  1.5, wx: 3,  wy: 3,   color: 0xecdcb8 },
     { id: 'ghost-return',     x:  3,   y:  1.5, wx: 3,  wy: 3,   color: 0xd8d0e8 },
     { id: 'mirror',           x: -3,   y:  4.5, wx: 3,  wy: 3,   color: 0xb8cce0 },
     { id: 'hallway',          x:  0,   y:  4.5, wx: 3,  wy: 3,   color: 0xecdcb8 },
@@ -111,6 +110,7 @@ scene.background = new THREE.Color(0xCCE8F8);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.localClippingEnabled = true;   // needed for ghost-window clipping planes
 document.getElementById('canvas-wrap').appendChild(renderer.domElement);
 
 const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 200);
@@ -130,6 +130,7 @@ const roomMeshes  = {};
 const roomGroups  = {};
 const allMeshes   = [];
 let bedroomGlass  = null;
+let busStopDog    = null;
 const nightStars  = [];
 const allGlassPanes     = []; // all non-door window glass panes
 const ghostFigureMeshes = []; // roof figure, visible from ghost-silhouette step onward
@@ -149,7 +150,7 @@ const FLOOR_BROWN = new THREE.Color(0x8C6A48);
 function vividColor(c) {
     const hsl = {};
     c.getHSL(hsl);
-    return new THREE.Color().setHSL(hsl.h, Math.min(1.0, hsl.s * 3.5), hsl.l * 0.65);
+    return new THREE.Color().setHSL(hsl.h, Math.min(1.0, hsl.s * 1.8), hsl.l * 0.82);
 }
 
 function makeRoom(def, idx) {
@@ -304,15 +305,14 @@ ROOMS.forEach((def, i) => makeRoom(def, i));
     roomGroups['bus-stop'] = g;
 
     const frameCol = 0x607068;
-    const glassM = () => new THREE.MeshBasicMaterial({ color: 0x9ABFCF, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
+    const glassM = (c = 0x7A90B0) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
     const solidM = (c) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide });
     const lineM  = () => new THREE.LineBasicMaterial({ color: frameCol, transparent: true, opacity: 0 });
 
-    // Back glass wall
+    // Back glass wall — higher opacity so it stays visible against dark sky
     const back = new THREE.Mesh(new THREE.PlaneGeometry(sw, sh), glassM());
     back.position.z = -sd / 2;
-    back.userData.originalColor = new THREE.Color(0x2A3848);
-    g.add(addMesh(back, 0.38));
+    g.add(addMesh(back, 0.55));
     roomMeshes['bus-stop'] = back;
 
     // Left glass panel (upper portion only — open at bottom for bench access)
@@ -320,7 +320,7 @@ ROOMS.forEach((def, i) => makeRoom(def, i));
     const lwall = new THREE.Mesh(new THREE.PlaneGeometry(sd, leftH), glassM());
     lwall.rotation.y = Math.PI / 2;
     lwall.position.set(-sw / 2, sh / 2 - leftH / 2, 0);
-    g.add(addMesh(lwall, 0.32));
+    g.add(addMesh(lwall, 0.45));
 
     // Roof (solid, slight overhang)
     const roofW = sw + 0.35, roofD = sd + 0.25;
@@ -420,51 +420,47 @@ ROOMS.forEach((def, i) => makeRoom(def, i));
     dogMesh.userData.targetOp = 0;
     allMeshes.push(dogMesh);
     scene.add(dogMesh);
-    setTimeout(() => { dogMesh.userData.targetOp = 0.58; }, busTiming);
+    busStopDog = dogMesh; // shown only when bus-stop step is active
 }
 
 
-// ── Ghost figure in roof — visible from ghost-silhouette step onward ──────────
+// ── Ghost figure on roof ridge — visible from ghost-silhouette step onward ────
+// ── Ghost presence in attic window — a faint light blob, not a figure ───────────
 {
     const gfReg = (m, op) => {
         m.userData.baseOp = op; m.userData.targetOp = 0;
+        m.renderOrder = 12;
         allMeshes.push(m); scene.add(m); ghostFigureMeshes.push(m); return m;
     };
-    const gfMat = () => new THREE.LineBasicMaterial({ color: 0xEEECCC, transparent: true, opacity: 0 });
-    const gfX = 0.4, gfZ = -0.2;  // slightly off-centre on roof ridge
 
-    // Soft glow behind figure
-    const glow = new THREE.Mesh(
-        new THREE.SphereGeometry(0.42, 8, 6),
-        new THREE.MeshBasicMaterial({ color: 0xFFFFAA, transparent: true, opacity: 0 }));
-    glow.position.set(gfX, 11.65, gfZ);
-    gfReg(glow, 0.13);
+    // Clipping planes confine the ghost to the attic window bounds (world space)
+    // Window: x ∈ [-0.40, 0.40], y ∈ [10.40, 11.05]
+    const gfClip = [
+        new THREE.Plane(new THREE.Vector3( 1, 0, 0),  0.40),
+        new THREE.Plane(new THREE.Vector3(-1, 0, 0),  0.40),
+        new THREE.Plane(new THREE.Vector3( 0, 1, 0), -10.40),
+        new THREE.Plane(new THREE.Vector3( 0,-1, 0), 11.05),
+    ];
 
-    // Head circle
-    const headPts = [];
-    for (let i = 0; i <= 10; i++) {
-        const a = i / 10 * Math.PI * 2;
-        headPts.push(new THREE.Vector3(gfX + Math.cos(a)*0.16, 12.02 + Math.sin(a)*0.20, gfZ));
-    }
-    gfReg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(headPts), gfMat()), 0.72);
+    const gfX = 0, gfY = 10.72, gfZ = 1.85;   // centred inside the gable
 
-    // Body
-    gfReg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(gfX, 11.80, gfZ),
-        new THREE.Vector3(gfX, 11.26, gfZ),
-    ]), gfMat()), 0.72);
+    // Main blob — warm pale glow, clipped to window
+    const blobMat = new THREE.MeshBasicMaterial({
+        color: 0xF0ECD8, transparent: true, opacity: 0,
+        depthTest: false, clippingPlanes: gfClip
+    });
+    const blob = new THREE.Mesh(new THREE.SphereGeometry(0.26, 10, 8), blobMat);
+    blob.position.set(gfX, gfY, gfZ);
+    gfReg(blob, 0.32);
 
-    // Left arm raised
-    gfReg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(gfX, 11.62, gfZ),
-        new THREE.Vector3(gfX - 0.34, 11.88, gfZ),
-    ]), gfMat()), 0.66);
-
-    // Right arm raised
-    gfReg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(gfX, 11.62, gfZ),
-        new THREE.Vector3(gfX + 0.30, 11.82, gfZ),
-    ]), gfMat()), 0.66);
+    // Larger diffuse halo behind the blob
+    const haloMat = new THREE.MeshBasicMaterial({
+        color: 0xFFF8F0, transparent: true, opacity: 0,
+        depthTest: false, clippingPlanes: gfClip
+    });
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.46, 10, 8), haloMat);
+    halo.position.set(gfX, gfY + 0.04, gfZ - 0.08);
+    gfReg(halo, 0.10);
 }
 
 // Roof
@@ -513,6 +509,50 @@ ROOMS.forEach((def, i) => makeRoom(def, i));
         scene.add(l);
         setTimeout(() => { l.userData.targetOp = 1.0; }, 1300);
     });
+
+    // ── Gable attic window near ridge peak ───────────────────────────────────
+    {
+        const awX = 0, awY = 10.72, awZ = dh + 0.01;
+        const awW = 0.80, awH = 0.65;
+        const awDelay = 1500;
+
+        const awLineMat = () => new THREE.LineBasicMaterial({ color: 0x5C4A38, transparent: true, opacity: 0 });
+        const awRegLine = (pts) => {
+            const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), awLineMat());
+            l.userData.isRoof = true; l.renderOrder = 11;
+            addMesh(l, 1.0); scene.add(l);
+            setTimeout(() => { l.userData.targetOp = 1.0; }, awDelay);
+        };
+
+        // Pane — warm deep dusk tone, not stark black
+        const pane = new THREE.Mesh(new THREE.PlaneGeometry(awW, awH),
+            new THREE.MeshBasicMaterial({ color: 0x1A1428, transparent: true, opacity: 0, depthWrite: false }));
+        pane.position.set(awX, awY, awZ);
+        pane.userData.isRoof = true; pane.renderOrder = 11;
+        addMesh(pane, 0.78); scene.add(pane);
+        setTimeout(() => { pane.userData.targetOp = 0.78; }, awDelay);
+
+        // Window frame + 4-pane cross
+        const L = awX - awW/2, R = awX + awW/2, B = awY - awH/2, T = awY + awH/2, z2 = awZ + 0.01;
+        awRegLine([new THREE.Vector3(L,B,z2), new THREE.Vector3(R,B,z2),
+                   new THREE.Vector3(R,T,z2), new THREE.Vector3(L,T,z2), new THREE.Vector3(L,B,z2)]);
+        awRegLine([new THREE.Vector3(awX, B, z2), new THREE.Vector3(awX, T, z2)]);
+        awRegLine([new THREE.Vector3(L, awY, z2), new THREE.Vector3(R, awY, z2)]);
+
+        // Decorative pediment: small triangle above the window
+        awRegLine([
+            new THREE.Vector3(L - 0.07, T, z2),
+            new THREE.Vector3(awX,      T + 0.28, z2),
+            new THREE.Vector3(R + 0.07, T, z2),
+        ]);
+
+        // Sill shelf
+        awRegLine([
+            new THREE.Vector3(L - 0.07, B - 0.04, z2),
+            new THREE.Vector3(R + 0.07, B - 0.04, z2),
+        ]);
+    }
+
 }
 
 
@@ -1169,78 +1209,125 @@ detail([
         ]), ln(cEdge)), 0.86).renderOrder = 3;
     }
 
-    // Chandelier above dining table
+    // Chandelier above dining table — fancy 6-arm version, hung low
     {
         const cx = rx, cz = tZ;
         const hy    = 2.85;      // ceiling hook
-        const hubY  = 2.10;      // crown hub
-        const armY  = 1.88;      // arm tips
-        const aR    = 0.42;      // horizontal arm reach
-        const dropY = 1.42;      // pendant drop bottoms (0.80 above table top)
-        const centY = 1.30;      // central crystal tip
-        const gold  = 0xA8862A;  // brass/gold
+        const hubY  = 1.78;      // crown hub (lowered)
+        const armY  = 1.54;      // arm tips (lowered)
+        const aR    = 0.44;      // horizontal arm reach
+        const dropY = 1.10;      // pendant bottoms (~0.44 m above table top)
+        const centY = 1.02;      // central crystal shoulder (~0.30 m above table)
+        const gold    = 0xA8862A;  // brass/gold
+        const crystal = 0xC8E0F4;  // pale ice-blue crystal
 
         // Suspension rod ceiling → hub
         reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(cx, hy, cz), new THREE.Vector3(cx, hubY, cz),
         ]), ln(gold)), 0.90).renderOrder = 4;
 
-        // Hub crown ring (12-sided horizontal polygon)
+        // Outer hub crown ring
         const hubPts = [];
-        for (let i = 0; i <= 12; i++) {
-            const a = i / 12 * Math.PI * 2;
-            hubPts.push(new THREE.Vector3(cx + Math.cos(a) * 0.16, hubY, cz + Math.sin(a) * 0.16));
+        for (let i = 0; i <= 16; i++) {
+            const a = i / 16 * Math.PI * 2;
+            hubPts.push(new THREE.Vector3(cx + Math.cos(a) * 0.17, hubY, cz + Math.sin(a) * 0.17));
         }
         reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(hubPts), ln(gold)), 0.90).renderOrder = 4;
 
-        // 4 arms radiating outward and slightly downward
-        for (const [dx, dz] of [[aR, 0], [-aR, 0], [0, aR], [0, -aR]]) {
+        // Inner hub ring (smaller, slightly lower — gives a crown profile)
+        const hubPts2 = [];
+        for (let i = 0; i <= 16; i++) {
+            const a = i / 16 * Math.PI * 2;
+            hubPts2.push(new THREE.Vector3(cx + Math.cos(a) * 0.09, hubY - 0.07, cz + Math.sin(a) * 0.09));
+        }
+        reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(hubPts2), ln(gold)), 0.88).renderOrder = 4;
+
+        // 6 arms at 60° spacing radiating outward and downward
+        const armTips = Array.from({ length: 6 }, (_, i) => {
+            const a = i / 6 * Math.PI * 2;
+            return [Math.cos(a) * aR, Math.sin(a) * aR];
+        });
+        for (const [dx, dz] of armTips) {
             reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
                 new THREE.Vector3(cx, hubY, cz), new THREE.Vector3(cx + dx, armY, cz + dz),
             ]), ln(gold)), 0.90).renderOrder = 4;
         }
 
-        // Decorative outer ring at arm-tip height
+        // Outer decorative ring at arm-tip height (24-gon for smoothness)
         const outerPts = [];
-        for (let i = 0; i <= 16; i++) {
-            const a = i / 16 * Math.PI * 2;
-            outerPts.push(new THREE.Vector3(cx + Math.cos(a) * aR * 0.85, armY, cz + Math.sin(a) * aR * 0.85));
+        for (let i = 0; i <= 24; i++) {
+            const a = i / 24 * Math.PI * 2;
+            outerPts.push(new THREE.Vector3(cx + Math.cos(a) * aR * 0.86, armY, cz + Math.sin(a) * aR * 0.86));
         }
         reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(outerPts), ln(gold)), 0.90).renderOrder = 4;
 
-        // Bobeche cups at each arm tip (small horizontal ring)
-        for (const [dx, dz] of [[aR, 0], [-aR, 0], [0, aR], [0, -aR]]) {
+        // Mid-ring between hub and arms
+        const midPts = [];
+        for (let i = 0; i <= 18; i++) {
+            const a = i / 18 * Math.PI * 2;
+            midPts.push(new THREE.Vector3(cx + Math.cos(a) * aR * 0.46, armY + 0.04, cz + Math.sin(a) * aR * 0.46));
+        }
+        reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(midPts), ln(gold)), 0.86).renderOrder = 4;
+
+        // Bobeche cups at each arm tip
+        for (const [dx, dz] of armTips) {
             const bPts = [];
-            for (let i = 0; i <= 8; i++) {
-                const a = i / 8 * Math.PI * 2;
-                bPts.push(new THREE.Vector3(cx + dx + Math.cos(a) * 0.055, armY, cz + dz + Math.sin(a) * 0.055));
+            for (let i = 0; i <= 10; i++) {
+                const a = i / 10 * Math.PI * 2;
+                bPts.push(new THREE.Vector3(cx + dx + Math.cos(a) * 0.06, armY, cz + dz + Math.sin(a) * 0.06));
             }
             reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(bPts), ln(gold)), 0.88).renderOrder = 4;
         }
 
-        // Pendant chains hanging from each arm tip
-        for (const [dx, dz] of [[aR, 0], [-aR, 0], [0, aR], [0, -aR]]) {
+        // Pendant chains from each arm tip down to bulb
+        for (const [dx, dz] of armTips) {
             reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(cx + dx, armY, cz + dz), new THREE.Vector3(cx + dx, dropY, cz + dz),
+                new THREE.Vector3(cx + dx, armY, cz + dz),
+                new THREE.Vector3(cx + dx, dropY, cz + dz),
             ]), ln(gold)), 0.90).renderOrder = 4;
         }
 
-        // Central pendant rod from hub
+        // Crystal teardrop drops between arms (6 shorter dangles on the outer ring)
+        for (let i = 0; i < 6; i++) {
+            const a = (i + 0.5) / 6 * Math.PI * 2;
+            const rr = aR * 0.86;
+            const ox = cx + Math.cos(a) * rr, oz = cz + Math.sin(a) * rr;
+            const dBot = dropY + 0.14;
+            reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(ox, armY, oz),
+                new THREE.Vector3(ox, dBot, oz),
+            ]), ln(gold)), 0.80).renderOrder = 4;
+            for (let fi = 0; fi < 4; fi++) {
+                const fa = fi / 4 * Math.PI * 2;
+                reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(ox + Math.cos(fa) * 0.025, dBot, oz + Math.sin(fa) * 0.025),
+                    new THREE.Vector3(ox, dBot - 0.055, oz),
+                ]), ln(crystal)), 0.76).renderOrder = 4;
+            }
+        }
+
+        // Central pendant rod hub → crystal shoulder
         reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
             new THREE.Vector3(cx, hubY, cz), new THREE.Vector3(cx, centY + 0.10, cz),
         ]), ln(gold)), 0.90).renderOrder = 4;
 
-        // Crystal teardrop: 4 facet lines converging to a tip
-        const crR = 0.065, tipY = centY - 0.08;
-        for (let i = 0; i < 4; i++) {
-            const a = i / 4 * Math.PI * 2;
+        // Central crystal teardrop — 6 facets + equatorial ring
+        const crR = 0.085, tipY = centY - 0.12;
+        for (let i = 0; i < 6; i++) {
+            const a = i / 6 * Math.PI * 2;
             reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints([
                 new THREE.Vector3(cx + Math.cos(a) * crR, centY + 0.10, cz + Math.sin(a) * crR),
                 new THREE.Vector3(cx, tipY, cz),
-            ]), ln(gold)), 0.85).renderOrder = 4;
+            ]), ln(crystal)), 0.86).renderOrder = 4;
         }
+        const eqPts = [];
+        for (let i = 0; i <= 12; i++) {
+            const a = i / 12 * Math.PI * 2;
+            eqPts.push(new THREE.Vector3(cx + Math.cos(a) * crR, centY + 0.03, cz + Math.sin(a) * crR));
+        }
+        reg(new THREE.Line(new THREE.BufferGeometry().setFromPoints(eqPts), ln(crystal)), 0.80).renderOrder = 4;
 
-        // Glowing bulbs: 4 pendant tips + 1 central crystal
+        // Glowing bulbs at each arm tip + central glow
         const mkBulb = (bx, by, bz, r = 0.09) => {
             const m = new THREE.Mesh(
                 new THREE.SphereGeometry(r, 8, 6),
@@ -1249,10 +1336,9 @@ detail([
             m.position.set(bx, by, bz);
             reg(m, 0.92).renderOrder = 4;
         };
-        mkBulb(cx + aR, dropY - 0.04, cz);
-        mkBulb(cx - aR, dropY - 0.04, cz);
-        mkBulb(cx, dropY - 0.04, cz + aR);
-        mkBulb(cx, dropY - 0.04, cz - aR);
+        for (const [dx, dz] of armTips) {
+            mkBulb(cx + dx, dropY - 0.04, cz + dz);
+        }
         mkBulb(cx, centY - 0.04, cz, 0.07);
     }
 
@@ -1393,12 +1479,103 @@ function setRoomTranslucent(id) {
     });
 }
 
+// ── Text theme per step ───────────────────────────────────────────────────────
+// Color + shadow adapt to scene lighting: dark ink (day) → cool blue-white
+// (amber dusk) → warm gold (purple twilight) → cream (deep night).
+
+const STEP_THEMES = {
+    // Day — entrance/mirror over open sky: dark ink works fine
+    'entrance': { color: '#1a110a', shadow: '0 0 14px rgba(190,218,248,0.65), 0 1px 3px rgba(255,250,245,0.55)' },
+    'mirror':   { color: '#1a110a', shadow: '0 0 14px rgba(190,218,248,0.65), 0 1px 3px rgba(255,250,245,0.55)' },
+    // Hallway text overlaps house walls — near-white + dark micro-stroke reads on any bg
+    'hallway': {
+        color: '#FFFEF8',
+        shadow: [
+            '-0.8px -0.8px 0 rgba(10,5,0,0.88)',
+            ' 0.8px -0.8px 0 rgba(10,5,0,0.88)',
+            '-0.8px  0.8px 0 rgba(10,5,0,0.88)',
+            ' 0.8px  0.8px 0 rgba(10,5,0,0.88)',
+            '0 0 14px rgba(200,225,255,0.35)',
+        ].join(','),
+    },
+    // Amber dusk — warm white + strong dark outline, no blue
+    'window': {
+        color: '#FFF8F0',
+        shadow: [
+            '-1px -1px 0 rgba(15,5,0,0.82)',
+            ' 1px -1px 0 rgba(15,5,0,0.82)',
+            '-1px  1px 0 rgba(15,5,0,0.82)',
+            ' 1px  1px 0 rgba(15,5,0,0.82)',
+            '0 0 14px rgba(255,248,238,0.28)',
+        ].join(','),
+    },
+    // Purple twilight — warm gold against cool violet
+    'bus-stop': {
+        color: '#FFE080',
+        shadow: [
+            '-0.8px -0.8px 0 rgba(8,3,15,0.65)',
+            ' 0.8px -0.8px 0 rgba(8,3,15,0.65)',
+            '-0.8px  0.8px 0 rgba(8,3,15,0.65)',
+            ' 0.8px  0.8px 0 rgba(8,3,15,0.65)',
+            '0 0 24px rgba(220,160,40,0.40)',
+        ].join(','),
+    },
+    // Night — bright cream + stronger glow so text reads clearly on dark bg
+    'ghost-silhouette': { color: '#F5EEE6', shadow: '0 1px 4px rgba(0,0,0,0.90), 0 0 22px rgba(80,40,200,0.35), 0 0 8px rgba(255,255,255,0.10)' },
+    'bathroom':         { color: '#FFFFFF', shadow: '0 1px 5px rgba(0,0,0,0.96), 0 0 28px rgba(70,35,200,0.50), 0 0 12px rgba(255,255,255,0.20)', dark: true },
+    'ghost-return':     { color: '#F6F0E8', shadow: '0 1px 4px rgba(0,0,0,0.92), 0 0 20px rgba(55,28,160,0.35), 0 0 8px rgba(255,255,255,0.10)' },
+    'window-cracked':   { color: '#FFFFFF', shadow: '0 1px 4px rgba(0,0,0,0.92), 0 0 30px rgba(120,80,255,0.55), 0 0 14px rgba(255,255,255,0.22)' },
+    'hallway-return':   { color: '#F5F0E8', shadow: '0 1px 4px rgba(0,0,0,0.95), 0 0 18px rgba(35,17,120,0.32), 0 0  8px rgba(255,255,255,0.10)' },
+};
+
+// ── Word-by-word streaming ─────────────────────────────────────────────────────
+
+const activeStreams = {};
+
+function streamBlock(id) {
+    if (activeStreams[id]) { clearInterval(activeStreams[id]); delete activeStreams[id]; }
+
+    const textEl = textBlocks[id].querySelector('.poem-block-text');
+    const text   = poemMap[id] || '';
+    textEl.innerHTML = '';
+
+    // Tokenise: words and line-breaks
+    const tokens = [];
+    text.split('\n').forEach((line, li, arr) => {
+        line.split(/\s+/).filter(Boolean).forEach(w => tokens.push({ t: 'w', v: w }));
+        if (li < arr.length - 1) tokens.push({ t: 'br' });
+    });
+
+    let i = 0;
+    const timer = setInterval(() => {
+        if (i >= tokens.length) { clearInterval(timer); delete activeStreams[id]; return; }
+        const tok = tokens[i++];
+        if (tok.t === 'br') {
+            textEl.appendChild(document.createElement('br'));
+        } else {
+            const span = document.createElement('span');
+            span.className = 'w';
+            span.textContent = tok.v + (i < tokens.length && tokens[i].t === 'w' ? ' ' : '');
+            textEl.appendChild(span);
+        }
+    }, 65);
+
+    activeStreams[id] = timer;
+}
+
+function stopStream(id) {
+    if (activeStreams[id]) { clearInterval(activeStreams[id]); delete activeStreams[id]; }
+    const textEl = textBlocks[id].querySelector('.poem-block-text');
+    textEl.innerHTML = (poemMap[id] || '').replace(/\n/g, '<br>');
+}
+
 // ── Navigation state ──────────────────────────────────────────────────────────
 
 let step = -1; // -1 = not started
 const counter = document.getElementById('nav-counter');
 const btnPrev = document.getElementById('btn-prev');
 const btnNext = document.getElementById('btn-next');
+const pageTitle = document.querySelector('.page-title');
 
 function goTo(newStep) {
     const clamped = Math.max(0, Math.min(SEQUENCE.length - 1, newStep));
@@ -1408,6 +1585,7 @@ function goTo(newStep) {
     // Restore previous room
     if (step >= 0 && step < SEQUENCE.length) {
         const oldId = SEQUENCE[step];
+        stopStream(oldId);
         textBlocks[oldId].className = 'poem-block visited';
         setRoomOpaque(ROOM_HIGHLIGHT[oldId] || oldId);
     }
@@ -1420,8 +1598,22 @@ function goTo(newStep) {
     const isDark = SCENE_BG[id] !== undefined;
     bgTarget.setHex(isDark ? SCENE_BG[id] : 0xCCE8F8);
 
-    // Stars appear once it's truly dark (ghost-silhouette) and persist
-    if (id === 'ghost-silhouette') nightStars.forEach(m => { m.userData.targetOp = m.userData.baseOp; });
+    // Adapt text colour + shadow to scene lighting
+    const theme = STEP_THEMES[id];
+    if (theme) {
+        poemLayer.style.setProperty('--poem-color', theme.color);
+        poemLayer.style.setProperty('--poem-shadow', theme.shadow);
+    }
+    pageTitle.style.color = isDark ? 'rgba(215,205,190,0.45)' : 'rgba(58,46,34,0.45)';
+
+    // Stars only when it's truly dark — hide if retreating before ghost-silhouette
+    {
+        const darkIdx = SEQUENCE.indexOf('ghost-silhouette');
+        nightStars.forEach(m => { m.userData.targetOp = step >= darkIdx ? m.userData.baseOp : 0; });
+    }
+
+    // Dog shadow only visible during the bus-stop step
+    if (busStopDog) busStopDog.userData.targetOp = id === 'bus-stop' ? busStopDog.userData.baseOp : 0;
 
     // Ghost figure appears at ghost-silhouette and persists
     if (id === 'ghost-silhouette') ghostFigureMeshes.forEach(m => { m.userData.targetOp = m.userData.baseOp; });
@@ -1429,8 +1621,10 @@ function goTo(newStep) {
     if (isLast) {
         textBlocks[id].className = 'poem-block visited';
     } else {
-        textBlocks[id].className = 'poem-block active';
+        const hasDarkBg = STEP_THEMES[id]?.dark === true;
+        textBlocks[id].className = 'poem-block active' + (hasDarkBg ? ' is-dark' : '');
         setRoomTranslucent(ROOM_HIGHLIGHT[id] || id);
+        streamBlock(id);
     }
 
     const look = ROOM_LOOK_AT[id] || TARGET;
